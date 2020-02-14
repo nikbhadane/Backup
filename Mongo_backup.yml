@@ -1,0 +1,91 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mongo-bk-pv-knode4
+  labels:
+    volume-category: mongo-bk-volume
+spec:
+  capacity:
+    storage: 50Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-storage
+  local:
+    path: /K8S-data/mongo-backup
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - knode4
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: mongo-bk-data-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 40Gi
+  storageClassName: "local-storage"
+  selector:
+    matchLabels:
+      volume-category: mongo-bk-volume
+*******************************************************
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: mongo-dump-config
+  labels:
+    app: mongo-dump
+data:
+  mogo-dump.sh: |
+        #!/bin/bash
+        APP_NAME="Mongo-STG-bk"
+        MONGO_HOST="mongodb://mongo-0:27017,mongo-1:27017,mongo-2:27017/?replicaSet=rs0"
+        TIMESTAMP=`date +%F-%H%M`
+        BACKUP_NAME="$APP_NAME-$TIMESTAMP.dump"
+        BACKUPS_DIR="/data/mongobackup"
+        RETAINBACKUPTIME="5"
+        mongodump --uri=$MONGO_HOST --gzip --archive=$BACKUPS_DIR/$BACKUP_NAME
+        find $BACKUPS_DIR -type f -mtime +$RETAINBACKUPTIME -exec rm {} +
+        echo "Mongo-DB backup completed"
+---
+apiVersion: batch/v1beta1
+kind: CronJob
+metadata:
+  name: mongo-dump
+spec:
+  schedule: "0 5 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: cron-container
+            image: mongo
+            command: [ "/bin/sh" ]
+            ports:
+              - containerPort: 27017
+                name: mongoport
+                protocol: TCP
+            args: [ "/var/mongo-script/mogo-dump.sh" ]
+            volumeMounts:
+            - name: script
+              mountPath: "/var/mongo-script/"
+            - name: mongo-dumps
+              mountPath: /data/mongobackup
+          volumes:
+          - name: script
+            configMap:
+              name: mongo-dump-config
+          - name: mongo-dumps
+            persistentVolumeClaim:
+              claimName: mongo-bk-data-pvc
+          restartPolicy: OnFailure
+
