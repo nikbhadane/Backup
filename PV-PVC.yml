@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: mongo-bk-pv-knode4
+  labels:
+    volume-category: mongo-bk-volume
+spec:
+  capacity:
+    storage: 50Gi
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: local-storage
+  local:
+    path: /K8S-data/mongo-backup
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - knode4
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: mongo-bk-data-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 40Gi
+  storageClassName: "local-storage"
+  selector:
+    matchLabels:
+      volume-category: mongo-bk-volume
