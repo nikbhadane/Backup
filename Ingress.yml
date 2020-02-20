@@ -1,0 +1,78 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: webhostip
+  labels:
+    app: nginx-ingress
+spec:
+  ports:
+  - name: rootinternal
+    port: 81
+    protocol: TCP
+    targetPort: 81
+
+  - name: rootexternal
+    port: 229
+    protocol: TCP
+    targetPort: 229    
+        
+  clusterIP: None
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: webhostip
+  labels:
+    app: nginx-ingress
+subsets:
+- addresses:
+  - ip: 10.10.10.10
+  ports:
+  - name: rootinternal
+    port: 81
+    protocol: TCP
+
+  - name: rootexternal
+    port: 229
+    protocol: TCP
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: ingress-internal
+  labels:
+    app: nginx-ingress
+  annotations:
+    kubernetes.io/ingress.class: internal
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+
+spec:
+  rules:
+  - http:
+      paths:
+      - backend:
+          serviceName: webhostip
+          servicePort: 81
+        path: /
+        
+      - backend:
+          serviceName: webhostip
+          servicePort: 229
+        path: /token
+
+      - backend:
+          serviceName: s1
+          servicePort: 10
+        path: /api/templates
+
+      - backend:
+          serviceName: s2
+          servicePort: 20
+        path: /replenishment
+
+      - backend:
+          serviceName: s3
+          servicePort: 30
+        path: /api/configurations
